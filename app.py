@@ -11,12 +11,19 @@ st.title("Financial Research AI Agent")
 st.caption("Week 1-2 demo: Indian stock price analysis, RSI, moving average, and comparison.")
 st.warning("This is educational financial analysis, not investment advice.")
 
-with st.sidebar:
-    st.header("Inputs")
+st.subheader("Stock Analysis Inputs")
+col_a, col_b, col_c = st.columns(3)
+
+with col_a:
     symbol = st.text_input("Enter stock symbol", "RELIANCE.NS").strip().upper()
+
+with col_b:
     compare_symbol = st.text_input("Compare with another stock", "TCS.NS").strip().upper()
+
+with col_c:
     period = st.selectbox("Select period", ["1mo", "3mo", "6mo", "1y", "5y"], index=3)
-    analyze = st.button("Analyze", type="primary")
+
+analyze = st.button("Analyze", type="primary")
 
 
 def calculate_rsi(close_prices, window=14):
@@ -162,4 +169,4 @@ if analyze:
             col1.metric(symbol, f"INR {first_price:.2f}")
             col2.metric(compare_symbol, f"INR {second_price:.2f}")
 else:
-    st.info("Enter stock symbols in the sidebar and click Analyze.")
+    st.info("Enter stock symbols above and click Analyze.")
