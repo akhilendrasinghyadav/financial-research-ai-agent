@@ -32,7 +32,12 @@ def calculate_rsi(close_prices, window=14):
 
 def fetch_stock_history(stock_symbol, selected_period):
     try:
-        return yf.Ticker(stock_symbol).history(period=selected_period)
+        data = yf.Ticker(stock_symbol).history(period=selected_period)
+
+        if data is not None and not data.empty and "Close" in data.columns:
+            data = data.dropna(subset=["Close"])
+
+        return data
     except Exception as error:
         st.error(f"Could not fetch data for {stock_symbol}: {error}")
         return None
