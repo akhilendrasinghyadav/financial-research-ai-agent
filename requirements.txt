@@ -1,8 +1,3 @@
-﻿streamlit
+streamlit
 yfinance
 plotly
-pandas
-numpy
-requests
-vaderSentiment
-python-dotenv
