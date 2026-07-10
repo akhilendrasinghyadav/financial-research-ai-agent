@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
@@ -34,6 +36,32 @@ def fetch_stock_history(stock_symbol, selected_period):
     except Exception as error:
         st.error(f"Could not fetch data for {stock_symbol}: {error}")
         return None
+
+
+def extract_stock_symbol(question):
+    match = re.search(r"\b[A-Z0-9]+(?:\.NS|\.BO)\b", question.upper())
+    return match.group(0) if match else None
+
+
+st.subheader("Stock Price Chatbot")
+chat_question = st.text_input(
+    "Ask a stock price question",
+    "What is the latest price of RELIANCE.NS?"
+)
+
+if st.button("Ask Chatbot"):
+    chatbot_symbol = extract_stock_symbol(chat_question)
+
+    if chatbot_symbol is None:
+        st.error("Please include an Indian stock symbol like RELIANCE.NS or TCS.NS.")
+    else:
+        chatbot_data = fetch_stock_history(chatbot_symbol, "5d")
+
+        if chatbot_data is None or chatbot_data.empty:
+            st.error(f"No recent data found for {chatbot_symbol}.")
+        else:
+            chatbot_price = chatbot_data["Close"].iloc[-1]
+            st.success(f"{chatbot_symbol} latest closing price is INR {chatbot_price:.2f}.")
 
 
 if analyze:
