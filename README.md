@@ -53,6 +53,14 @@ This project is ready for Streamlit Community Cloud deployment.
 4. Select `app.py` as the entry file.
 5. Deploy.
 
+## Live Demo
+
+Streamlit App: https://financial-research-ai-agent-lj5i2bxh7tj6csoia6ga4t.streamlit.app/
+
+## Demo Video
+
+Demo video is included with the final submission.
+
 ## Disclaimer
 
 This app provides educational financial analysis only. It does not provide investment advice. Consult a registered financial advisor before making investment decisions.
