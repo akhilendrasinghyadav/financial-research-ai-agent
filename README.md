@@ -1,15 +1,20 @@
 # Financial Research AI Agent
 
-A Streamlit-based financial research assistant for Indian stock market analysis.
+A higher-level Streamlit financial research dashboard for Indian stock market analysis.
 
-## Week 1-2 Features
+## Features
 
 - Indian stock lookup using Yahoo Finance symbols such as `RELIANCE.NS`, `TCS.NS`, and `INFY.NS`
-- Candlestick price chart
-- 20-day moving average
-- RSI indicator
-- Stock comparison chart
-- Educational disclaimer for financial analysis
+- Stock price chatbot with symbol extraction
+- Cached market data fetching for faster reloads and fewer API calls
+- Candlestick chart with volume, 20-day SMA, 50-day SMA, and Bollinger Bands
+- RSI and MACD technical indicators
+- Risk analytics: total return, annual volatility, Sharpe ratio, max drawdown, best day, worst day, and positive-day ratio
+- Normalized comparison against another stock and a benchmark such as `^NSEI`
+- CSV export and downloadable text research report
+- Modular Python architecture under `src/`
+- GitHub Actions CI for compile checks and unit tests
+- Educational disclaimer for responsible financial analysis
 
 ## Tech Stack
 
@@ -17,7 +22,8 @@ A Streamlit-based financial research assistant for Indian stock market analysis.
 - Streamlit
 - yfinance
 - Plotly
-- pandas / numpy
+- pandas
+- numpy
 
 ## Setup
 
@@ -42,6 +48,29 @@ Then open the local Streamlit URL shown in the terminal.
 - `INFY.NS`
 - `HDFCBANK.NS`
 - `SBIN.NS`
+- `^NSEI`
+
+## Project Structure
+
+```text
+financial-research-ai-agent/
+  app.py
+  requirements.txt
+  src/
+    data.py
+    indicators.py
+    metrics.py
+    reporting.py
+  tests/
+    test_indicators.py
+  .github/workflows/ci.yml
+```
+
+## Run Tests
+
+```bash
+python -m unittest discover tests
+```
 
 ## Deployment
 
