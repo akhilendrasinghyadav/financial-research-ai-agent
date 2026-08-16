@@ -1,5 +1,7 @@
-streamlit
+﻿streamlit
 yfinance
-plotly
 pandas
 numpy
+plotly
+requests
+vaderSentiment

@@ -1,19 +1,43 @@
 import streamlit as st
 import plotly.graph_objects as go
+import requests
+from src.fundamentals import fetch_fundamentals
+from src.watchlist_db import add_watchlist_symbol, get_watchlist_symbols, init_watchlist_db, remove_watchlist_symbol
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from plotly.subplots import make_subplots
-
+from src.stock_universe import load_indian_stock_options
 from src.data import extract_stock_symbol, fetch_history, normalize_symbol
 from src.indicators import add_indicators
 from src.metrics import performance_summary, rsi_signal, trend_signal
 from src.reporting import build_text_report
+def format_inr(value):
+    return f"INR {value:,.2f}"
+def get_sentiment_label(text):
+    analyzer = SentimentIntensityAnalyzer()
+    score = analyzer.polarity_scores(text)["compound"]
 
+    if score >= 0.05:
+        return "Positive", score
+    elif score <= -0.05:
+        return "Negative", score
+    else:
+        return "Neutral", score
 
 st.set_page_config(page_title="Financial Research AI Agent", layout="wide")
+init_watchlist_db()
+st.title("Financial Research AI Agent")
+st.caption("Stock analysis with charts, technical indicators, risk metrics, news sentiment, and downloadable reports.")
 
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def cached_history(symbol, period):
     return fetch_history(symbol, period)
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_fundamentals(symbol):
+    return fetch_fundamentals(symbol)
+@st.cache_data(ttl=86400, show_spinner=False)
+def cached_indian_stock_options():
+    return load_indian_stock_options()
 
 
 def price_chart(data, symbol):
@@ -112,28 +136,57 @@ def comparison_chart(series_map):
         height=480,
     )
     return fig
-
-
 st.title("Financial Research AI Agent")
-st.caption("Advanced Streamlit research dashboard for Indian equity analysis.")
+st.caption(
+    "Analyze stocks with price charts, technical indicators, risk metrics, "
+    "news sentiment, and downloadable research reports."
+)
 st.warning("Educational analysis only. This app does not provide investment advice.")
+st.info("Indian market hours: 9:15 AM to 3:30 PM IST, Monday to Friday.")
+stock_options = cached_indian_stock_options()
+stock_symbols = [item["symbol"] for item in stock_options]
+stock_label_map = {item["symbol"]: item["label"] for item in stock_options}
 
+
+def show_stock_label(stock_symbol):
+    return stock_label_map.get(stock_symbol, stock_symbol)
+
+
+def default_stock_index(default_symbol):
+    return stock_symbols.index(default_symbol) if default_symbol in stock_symbols else 0
 with st.container():
     col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 1.2, 0.8])
 
     with col_a:
-        symbol_input = st.text_input("Primary stock", "RELIANCE.NS")
+        symbol_input = st.selectbox(
+            "Stock symbol",
+            stock_symbols,
+            index=default_stock_index("RELIANCE.NS"),
+            format_func=show_stock_label,
+        )
 
     with col_b:
-        compare_input = st.text_input("Compare stock", "TCS.NS")
+        compare_options = [""] + stock_symbols
+        compare_input = st.selectbox(
+            "Compare with",
+            compare_options,
+            index=compare_options.index("TCS.NS") if "TCS.NS" in compare_options else 0,
+            format_func=lambda value: "None" if value == "" else show_stock_label(value),
+        )
 
     with col_c:
-        benchmark_input = st.text_input("Benchmark", "^NSEI")
+        benchmark_input = st.text_input("Benchmark index", "^NSEI")
 
     with col_d:
-        period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=3)
+       period = st.selectbox("History period", ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y"], index=5)
 
-    analyze = st.button("Run research", type="primary", use_container_width=True)
+    if "research_loaded" not in st.session_state:
+        st.session_state.research_loaded = False
+
+    if st.button("Analyze stock", type="primary", use_container_width=True):
+        st.session_state.research_loaded = True
+
+    news_api_key = st.text_input("News API key", type="password")
 
 
 chat_question = st.text_input(
@@ -154,16 +207,23 @@ if st.button("Ask chatbot"):
         else:
             price = chatbot_data["Close"].iloc[-1]
             date = chatbot_data.index[-1].date()
-            st.success(f"{chatbot_symbol} latest close was INR {price:.2f} on {date}.")
+        st.success(f"{chatbot_symbol} latest close was {format_inr(price)} on {date}.")
 
 
-if not analyze:
+if not st.session_state.research_loaded:
     st.info("Run research to load market data, indicators, comparison, risk metrics, and report export.")
     st.stop()
 
 
 symbol = normalize_symbol(symbol_input)
 compare_symbol = normalize_symbol(compare_input) if compare_input else ""
+benchmark_symbol = benchmark_input.strip().upper()
+
+st.caption(
+    f"Using symbols: Main = {symbol}, Compare = {compare_symbol or 'None'}, Benchmark = {benchmark_symbol}"
+)
+compare_symbol = normalize_symbol(compare_input) if compare_input else ""
+
 benchmark_symbol = benchmark_input.strip().upper()
 
 data = cached_history(symbol, period)
@@ -174,18 +234,21 @@ if data.empty:
     st.error("No data found. Try RELIANCE.NS, TCS.NS, INFY.NS, HDFCBANK.NS, or SBIN.NS.")
     st.stop()
 
+
 data = add_indicators(data)
 summary = performance_summary(data)
 latest_price = data["Close"].iloc[-1]
 latest_rsi = data["RSI"].dropna().iloc[-1] if not data["RSI"].dropna().empty else None
 
-overview, charts, risk, compare, export = st.tabs(
-    ["Overview", "Charts", "Risk", "Comparison", "Export"]
+overview, charts, risk, compare, watchlist, fundamentals, news, export = st.tabs(
+    ["Overview", "Charts", "Risk", "Comparison", "Watchlist", "Fundamentals", "News Sentiment", "Export"]
 )
+
+
 
 with overview:
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Latest close", f"INR {latest_price:.2f}")
+    col1.metric("Latest close", format_inr(latest_price))
     col2.metric("Total return", f"{summary['total_return']:.2%}")
     col3.metric("Annual volatility", f"{summary['annual_volatility']:.2%}")
     col4.metric("Max drawdown", f"{summary['max_drawdown']:.2%}")
@@ -252,19 +315,205 @@ with compare:
         )
 
     st.dataframe(metric_rows, use_container_width=True)
+    news_report_summary = "News sentiment: Not available. News API key was not provided."
 
-with export:
-    report = build_text_report(symbol, data, summary, latest_rsi)
-    st.text_area("Research summary", report, height=260)
-    st.download_button(
-        "Download indicator CSV",
-        data.to_csv().encode("utf-8"),
-        file_name=f"{symbol.replace('.', '_')}_research.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Download text report",
-        report.encode("utf-8"),
-        file_name=f"{symbol.replace('.', '_')}_report.txt",
-        mime="text/plain",
-    )
+with watchlist:
+    st.subheader("Saved Stock Watchlist")
+
+    watch_symbol = st.text_input("Add stock to watchlist", symbol)
+
+    if st.button("Add to watchlist"):
+        saved_symbol = normalize_symbol(watch_symbol)
+        add_watchlist_symbol(saved_symbol)
+        st.success(f"{saved_symbol} added to watchlist.")
+        st.rerun()
+
+    saved_symbols = get_watchlist_symbols()
+
+    if not saved_symbols:
+        st.info("No stocks saved yet.")
+    else:
+        for saved_symbol in saved_symbols:
+            col1, col2 = st.columns([3, 1])
+            col1.write(saved_symbol)
+
+            if col2.button("Remove", key=f"remove_{saved_symbol}"):
+                remove_watchlist_symbol(saved_symbol)
+                st.rerun()
+with fundamentals:
+    st.subheader("Fundamental Analysis")
+    st.caption("Fundamentals are latest available company data, not real-time tick data.")
+
+    if st.button("Refresh fundamentals"):
+        cached_fundamentals.clear()
+        st.rerun()
+
+    with st.spinner("Loading fundamentals..."):
+        fundamentals_data = cached_fundamentals(symbol)
+        compare_fundamentals = cached_fundamentals(compare_symbol) if compare_symbol else None
+
+    if not fundamentals_data:
+        st.info("Fundamental data not available for this symbol.")
+    else:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Company", fundamentals_data.get("Company", "N/A"))
+        col2.metric("Sector", fundamentals_data.get("Sector", "N/A"))
+        col3.metric("Industry", fundamentals_data.get("Industry", "N/A"))
+
+        st.dataframe(
+            [{"Metric": key, "Value": value} for key, value in fundamentals_data.items()],
+            use_container_width=True,
+        )
+
+        if compare_fundamentals:
+            st.subheader("Fundamental Comparison")
+
+            comparison_rows = []
+            for metric in ["Market Cap", "P/E Ratio", "Debt/Equity", "Profit Margin", "Revenue Growth", "Dividend Yield"]:
+                comparison_rows.append(
+                    {
+                        "Metric": metric,
+                        symbol: fundamentals_data.get(metric, "N/A"),
+                        compare_symbol: compare_fundamentals.get(metric, "N/A"),
+                    }
+                )
+
+            st.dataframe(comparison_rows, use_container_width=True)
+
+with news:
+    st.subheader("News Sentiment Analysis")
+
+    if not news_api_key:
+            st.info("Enter News API key to fetch stock news.")
+    else:
+            response = requests.get(
+                "https://newsapi.org/v2/everything",
+                headers={"X-Api-Key": news_api_key},
+                params={
+                    "q": symbol,
+                    "language": "en",
+                    "sortBy": "publishedAt",
+                    "pageSize": 5,
+                },
+                timeout=10,
+            )
+
+            news_data = response.json()
+
+            if response.status_code != 200:
+                error_message = news_data.get("message", "Could not fetch news.")
+                news_report_summary = f"News sentiment: Could not fetch news. {error_message}"
+                st.error(error_message)
+            else:
+                articles = news_data.get("articles", [])
+
+                if not articles:
+                    news_report_summary = "News sentiment: No recent news found."
+                    st.info("No recent news found.")
+                else:
+                    sentiment_scores = []
+                    sentiment_labels = []
+                    prepared_articles = []
+
+                    for article in articles:
+                        title = article.get("title", "No title")
+                        description = article.get("description") or ""
+                        source = article.get("source", {}).get("name", "Unknown source")
+                        url = article.get("url")
+
+                        text_for_sentiment = f"{title} {description}"
+                        sentiment, score = get_sentiment_label(text_for_sentiment)
+
+                        sentiment_scores.append(score)
+                        sentiment_labels.append(sentiment)
+
+                        prepared_articles.append({
+                            "title": title,
+                            "description": description,
+                            "source": source,
+                            "url": url,
+                            "sentiment": sentiment,
+                            "score": score,
+                        })
+
+                    average_score = sum(sentiment_scores) / len(sentiment_scores)
+
+                    if average_score >= 0.05:
+                        overall_sentiment = "Positive"
+                    elif average_score <= -0.05:
+                        overall_sentiment = "Negative"
+                    else:
+                        overall_sentiment = "Neutral"
+
+                    positive_count = sentiment_labels.count("Positive")
+                    negative_count = sentiment_labels.count("Negative")
+                    neutral_count = sentiment_labels.count("Neutral")
+
+                    news_report_summary = "\n".join(
+                        [
+                            "News Sentiment Summary",
+                            f"Overall sentiment: {overall_sentiment}",
+                            f"Average sentiment score: {average_score:.2f}",
+                            f"Positive articles: {positive_count}",
+                            f"Negative articles: {negative_count}",
+                            f"Neutral articles: {neutral_count}",
+                        ]
+                    )
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Overall Sentiment", overall_sentiment)
+                    col2.metric("Positive", positive_count)
+                    col3.metric("Negative", negative_count)
+                    col4.metric("Neutral", neutral_count)
+
+                    st.write(f"Average sentiment score: **{average_score:.2f}**")
+                    st.divider()
+
+                    for article in prepared_articles:
+                        st.markdown(f"**{article['title']}**")
+                        st.caption(article["source"])
+                        st.write(article["description"])
+                        st.write(
+                            f"Sentiment: **{article['sentiment']}** "
+                            f"({article['score']:.2f})"
+                        )
+
+                        if article["url"]:
+                            st.link_button("Read article", article["url"])
+
+    with export:
+       base_report = build_text_report(symbol, data, summary, latest_rsi)
+
+fundamentals_report = "\n".join(
+    [
+        "Fundamental Analysis Summary",
+        f"Company: {fundamentals_data.get('Company', 'N/A')}",
+        f"Sector: {fundamentals_data.get('Sector', 'N/A')}",
+        f"Industry: {fundamentals_data.get('Industry', 'N/A')}",
+        f"Market Cap: {fundamentals_data.get('Market Cap', 'N/A')}",
+        f"P/E Ratio: {fundamentals_data.get('P/E Ratio', 'N/A')}",
+        f"Debt/Equity: {fundamentals_data.get('Debt/Equity', 'N/A')}",
+        f"Profit Margin: {fundamentals_data.get('Profit Margin', 'N/A')}",
+        f"Revenue Growth: {fundamentals_data.get('Revenue Growth', 'N/A')}",
+        f"Dividend Yield: {fundamentals_data.get('Dividend Yield', 'N/A')}",
+        f"Fundamental Score: {fundamentals_data.get('Fundamental Score', 'N/A')}",
+        f"Score Reason: {fundamentals_data.get('Score Reason', 'N/A')}",
+    ]
+)
+
+report = f"{base_report}\n\n{fundamentals_report}\n\n{news_report_summary}"
+
+st.text_area("Research summary", report, height=260)
+st.download_button(
+            "Download indicator CSV",
+            data.to_csv().encode("utf-8"),
+            file_name=f"{symbol.replace('.', '_')}_research.csv",
+            mime="text/csv",
+        )
+
+st.download_button(
+            "Download text report",
+            report.encode("utf-8"),
+            file_name=f"{symbol.replace('.', '_')}_report.txt",
+            mime="text/plain",
+        )

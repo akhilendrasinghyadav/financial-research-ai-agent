@@ -8,7 +8,7 @@ def build_text_report(symbol, data, summary, latest_rsi):
     return "\n".join(
         [
             f"Financial Research Report: {symbol}",
-            f"Latest close: INR {latest_close:.2f} on {latest_date}",
+            f"Latest close: INR {latest_close:,.2f} on {latest_date}",
             f"Total return: {summary['total_return']:.2%}",
             f"Annual volatility: {summary['annual_volatility']:.2%}",
             f"Maximum drawdown: {summary['max_drawdown']:.2%}",
