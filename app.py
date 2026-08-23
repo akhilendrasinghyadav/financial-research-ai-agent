@@ -25,8 +25,32 @@ def get_sentiment_label(text):
 
 st.set_page_config(page_title="Financial Research AI Agent", layout="wide")
 init_watchlist_db()
-st.title("Financial Research AI Agent")
-st.caption("Stock analysis with charts, technical indicators, risk metrics, news sentiment, and downloadable reports.")
+st.markdown(
+    """
+    <style>
+    h1, h2, h3, h4,
+    div[data-testid="stHeading"] h1,
+    div[data-testid="stHeading"] h2,
+    div[data-testid="stHeading"] h3,
+    div[data-testid="stHeading"] h4 {
+                color: #e5e7eb !important;
+    }
+
+    div[data-baseweb="select"] span {
+        color: #22c55e !important;
+    }
+
+    input {
+        color: #22c55e !important;
+    }
+
+    textarea {
+        color: #22c55e !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -207,7 +231,7 @@ if st.button("Ask chatbot"):
         else:
             price = chatbot_data["Close"].iloc[-1]
             date = chatbot_data.index[-1].date()
-        st.success(f"{chatbot_symbol} latest close was {format_inr(price)} on {date}.")
+            st.success(f"{chatbot_symbol} latest close was {format_inr(price)} on {date}.")
 
 
 if not st.session_state.research_loaded:
@@ -384,93 +408,115 @@ with news:
     st.subheader("News Sentiment Analysis")
 
     if not news_api_key:
-            st.info("Enter News API key to fetch stock news.")
+        st.info("Enter News API key to fetch stock news.")
     else:
-            response = requests.get(
-                "https://newsapi.org/v2/everything",
-                headers={"X-Api-Key": news_api_key},
-                params={
-                    "q": symbol,
-                    "language": "en",
-                    "sortBy": "publishedAt",
-                    "pageSize": 5,
-                },
-                timeout=10,
-            )
+        news_query = symbol.replace(".NS", "").replace(".BO", "")
 
-            news_data = response.json()
+        if news_query == "RELIANCE":
+            news_query = "Reliance Industries"
+        elif news_query == "TCS":
+            news_query = "Tata Consultancy Services"
+        elif news_query == "INFY":
+            news_query = "Infosys"
+        elif news_query == "HDFCBANK":
+            news_query = "HDFC Bank"
 
-            if response.status_code != 200:
-                error_message = news_data.get("message", "Could not fetch news.")
-                news_report_summary = f"News sentiment: Could not fetch news. {error_message}"
-                st.error(error_message)
+        response = requests.get(
+            "https://newsapi.org/v2/everything",
+            headers={"X-Api-Key": news_api_key},
+            params={
+                "q": news_query,
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 5,
+            },
+            timeout=10,
+        )
+
+        news_data = response.json()
+
+        if response.status_code != 200:
+            error_message = news_data.get("message", "Could not fetch news.")
+            news_report_summary = f"News sentiment: Could not fetch news. {error_message}"
+            st.error(error_message)
+        else:
+            articles = news_data.get("articles", [])
+
+            if not articles:
+                news_report_summary = "News sentiment: No recent news found."
+                st.info("No recent news found.")
             else:
-                articles = news_data.get("articles", [])
+                sentiment_scores = []
+                sentiment_labels = []
+                prepared_articles = []
 
-                if not articles:
-                    news_report_summary = "News sentiment: No recent news found."
-                    st.info("No recent news found.")
-                else:
-                    sentiment_scores = []
-                    sentiment_labels = []
-                    prepared_articles = []
+                for article in articles:
+                    title = article.get("title", "No title")
+                    description = article.get("description") or ""
+                    source = article.get("source", {}).get("name", "Unknown source")
+                    url = article.get("url")
 
-                    for article in articles:
-                        title = article.get("title", "No title")
-                        description = article.get("description") or ""
-                        source = article.get("source", {}).get("name", "Unknown source")
-                        url = article.get("url")
+                    text_for_sentiment = f"{title} {description}"
+                    sentiment, score = get_sentiment_label(text_for_sentiment)
 
-                        text_for_sentiment = f"{title} {description}"
-                        sentiment, score = get_sentiment_label(text_for_sentiment)
+                    sentiment_scores.append(score)
+                    sentiment_labels.append(sentiment)
 
-                        sentiment_scores.append(score)
-                        sentiment_labels.append(sentiment)
-
-                        prepared_articles.append({
+                    prepared_articles.append(
+                        {
                             "title": title,
                             "description": description,
                             "source": source,
                             "url": url,
                             "sentiment": sentiment,
                             "score": score,
-                        })
-
-                    average_score = sum(sentiment_scores) / len(sentiment_scores)
-
-                    if average_score >= 0.05:
-                        overall_sentiment = "Positive"
-                    elif average_score <= -0.05:
-                        overall_sentiment = "Negative"
-                    else:
-                        overall_sentiment = "Neutral"
-
-                    positive_count = sentiment_labels.count("Positive")
-                    negative_count = sentiment_labels.count("Negative")
-                    neutral_count = sentiment_labels.count("Neutral")
-
-                    news_report_summary = "\n".join(
-                        [
-                            "News Sentiment Summary",
-                            f"Overall sentiment: {overall_sentiment}",
-                            f"Average sentiment score: {average_score:.2f}",
-                            f"Positive articles: {positive_count}",
-                            f"Negative articles: {negative_count}",
-                            f"Neutral articles: {neutral_count}",
-                        ]
+                        }
                     )
 
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("Overall Sentiment", overall_sentiment)
-                    col2.metric("Positive", positive_count)
-                    col3.metric("Negative", negative_count)
-                    col4.metric("Neutral", neutral_count)
+                average_score = sum(sentiment_scores) / len(sentiment_scores)
 
-                    st.write(f"Average sentiment score: **{average_score:.2f}**")
-                    st.divider()
+                if average_score >= 0.05:
+                    overall_sentiment = "Positive"
+                elif average_score <= -0.05:
+                    overall_sentiment = "Negative"
+                else:
+                    overall_sentiment = "Neutral"
 
-                    for article in prepared_articles:
-                        st.markdown(f"**{article['title']}**")
+                positive_count = sentiment_labels.count("Positive")
+                negative_count = sentiment_labels.count("Negative")
+                neutral_count = sentiment_labels.count("Neutral")
+
+                news_report_summary = "\n".join(
+                    [
+                        "News Sentiment Summary",
+                        f"Overall sentiment: {overall_sentiment}",
+                        f"Average sentiment score: {average_score:.2f}",
+                        f"Positive articles: {positive_count}",
+                        f"Negative articles: {negative_count}",
+                        f"Neutral articles: {neutral_count}",
+                    ]
+                )
+
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Overall Sentiment", overall_sentiment)
+                col2.metric("Positive", positive_count)
+                col3.metric("Negative", negative_count)
+                col4.metric("Neutral", neutral_count)
+
+                st.write(f"Average sentiment score: **{average_score:.2f}**")
+                st.divider()
+
+                for article in prepared_articles:
+                    st.markdown(f"**{article['title']}**")
+                    st.caption(article["source"])
+                    st.write(article["description"])
+                    st.write(
+                        f"Sentiment: **{article['sentiment']}** "
+                        f"({article['score']:.2f})"
+                    )
+
+                    if article["url"]:
+                        st.link_button("Read article", article["url"])
                         st.caption(article["source"])
                         st.write(article["description"])
                         st.write(
@@ -481,39 +527,61 @@ with news:
                         if article["url"]:
                             st.link_button("Read article", article["url"])
 
-    with export:
-       base_report = build_text_report(symbol, data, summary, latest_rsi)
+with export:
+    st.subheader("Export Reports")
 
-fundamentals_report = "\n".join(
-    [
-        "Fundamental Analysis Summary",
-        f"Company: {fundamentals_data.get('Company', 'N/A')}",
-        f"Sector: {fundamentals_data.get('Sector', 'N/A')}",
-        f"Industry: {fundamentals_data.get('Industry', 'N/A')}",
-        f"Market Cap: {fundamentals_data.get('Market Cap', 'N/A')}",
-        f"P/E Ratio: {fundamentals_data.get('P/E Ratio', 'N/A')}",
-        f"Debt/Equity: {fundamentals_data.get('Debt/Equity', 'N/A')}",
-        f"Profit Margin: {fundamentals_data.get('Profit Margin', 'N/A')}",
-        f"Revenue Growth: {fundamentals_data.get('Revenue Growth', 'N/A')}",
-        f"Dividend Yield: {fundamentals_data.get('Dividend Yield', 'N/A')}",
-        f"Fundamental Score: {fundamentals_data.get('Fundamental Score', 'N/A')}",
-        f"Score Reason: {fundamentals_data.get('Score Reason', 'N/A')}",
-    ]
-)
+    base_report = build_text_report(symbol, data, summary, latest_rsi)
 
-report = f"{base_report}\n\n{fundamentals_report}\n\n{news_report_summary}"
+    compare_report = "Comparison Summary: No comparison stock selected."
+    if compare_symbol and compare_data is not None and not compare_data.empty:
+        compare_indicator_data = add_indicators(compare_data)
+        compare_summary = performance_summary(compare_indicator_data)
+        compare_latest_price = compare_indicator_data["Close"].iloc[-1]
+        compare_latest_date = compare_indicator_data.index[-1].date()
 
-st.text_area("Research summary", report, height=260)
-st.download_button(
-            "Download indicator CSV",
-            data.to_csv().encode("utf-8"),
-            file_name=f"{symbol.replace('.', '_')}_research.csv",
-            mime="text/csv",
+        compare_report = "\n".join(
+            [
+                f"Comparison Stock Report: {compare_symbol}",
+                f"Latest close: {format_inr(compare_latest_price)} on {compare_latest_date}",
+                f"Total return: {compare_summary['total_return']:.2%}",
+                f"Annual volatility: {compare_summary['annual_volatility']:.2%}",
+                f"Maximum drawdown: {compare_summary['max_drawdown']:.2%}",
+                f"Sharpe ratio: {compare_summary['sharpe_ratio']:.2f}",
+            ]
         )
 
-st.download_button(
-            "Download text report",
-            report.encode("utf-8"),
-            file_name=f"{symbol.replace('.', '_')}_report.txt",
-            mime="text/plain",
-        )
+    safe_fundamentals = fundamentals_data if "fundamentals_data" in locals() else {}
+    fundamentals_report = "\n".join(
+        [
+            "Fundamental Analysis Summary",
+            f"Company: {safe_fundamentals.get('Company', 'N/A')}",
+            f"Sector: {safe_fundamentals.get('Sector', 'N/A')}",
+            f"Market Cap: {safe_fundamentals.get('Market Cap', 'N/A')}",
+            f"P/E Ratio: {safe_fundamentals.get('P/E Ratio', 'N/A')}",
+            f"Fundamental Score: {safe_fundamentals.get('Fundamental Score', 'N/A')}",
+        ]
+    )
+
+    safe_news_summary = (
+        news_report_summary
+        if "news_report_summary" in locals()
+        else "News sentiment: Not available."
+    )
+
+    report = f"{base_report}\n\n{compare_report}\n\n{fundamentals_report}\n\n{safe_news_summary}"
+
+    st.text_area("Research summary", report, height=320)
+
+    st.download_button(
+        "Download indicator CSV",
+        data.to_csv().encode("utf-8"),
+        file_name=f"{symbol.replace('.', '_')}_research.csv",
+        mime="text/csv",
+    )
+
+    st.download_button(
+        "Download text report",
+        report.encode("utf-8"),
+        file_name=f"{symbol.replace('.', '_')}_report.txt",
+        mime="text/plain",
+    )
