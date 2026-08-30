@@ -93,3 +93,28 @@ Demo video is included with the final submission.
 ## Disclaimer
 
 This app provides educational financial analysis only. It does not provide investment advice. Consult a registered financial advisor before making investment decisions.
+## Screenshots
+
+### Overview
+![Overview](screenshots/overview.png)
+
+### Charts
+![Charts](screenshots/charts.png)
+
+### Risk Metrics
+![Risk](screenshots/risk.png)
+
+### Comparison
+![Comparison](screenshots/comparison.png)
+
+### Watchlist
+![Watchlist](screenshots/watchlist.png)
+
+### Fundamentals
+![Fundamentals](screenshots/fundamentals.png)
+
+### News Sentiment
+![News Sentiment](screenshots/news.png)
+
+### Export
+![Export](screenshots/export.png)
